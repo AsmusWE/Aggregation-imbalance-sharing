@@ -59,7 +59,7 @@ ALLOCATION_LABELS = {
 
 # Figures wide enough (e.g. a multi-panel grid) to warrant a `figure*` (both columns) in
 # the paper, rather than a single-column `figure`.
-WIDE_FIGURES = set()
+WIDE_FIGURES = {"p_cost_ratio_grouped_bar"}
 
 
 def _save_all(figures: dict, prefix: str = ""):

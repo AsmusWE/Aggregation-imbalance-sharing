@@ -58,7 +58,7 @@ def plot_pv_coverage(price_prod_demand_df, client_pv_ownership, clients):
     ax2.set_xticks(list(x), display_labels, rotation=0)
     ax2.tick_params(axis="x", bottom=True)
     ax2.yaxis.set_major_locator(FixedLocator([0, 25, 50, 75, 100]))
-    ax2.set_ylabel("PV Coverage\n[%]")
+    ax2.set_ylabel("PV coverage\n[%]")
     ax2.grid(axis="y", which="major", color="gray", alpha=0.5, linewidth=0.5, zorder=0)
 
     fig.tight_layout()

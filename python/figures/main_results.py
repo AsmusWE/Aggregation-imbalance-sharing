@@ -77,7 +77,7 @@ def plot_results(
     client_name_mapping = create_alphabetic_client_mapping(clients)
     plot_keys_alphabetic = [client_name_mapping[c] for c in plot_keys]
 
-    skip_allocations = {"VCG"}
+    skip_allocations = {}
     # Order taken from the `allocations` argument (deterministic) rather than Julia's
     # unspecified Dict iteration order, restricted to allocations we actually have costs for.
     allocations = [a for a in allocations if a in allocation_costs and a not in skip_allocations]
@@ -168,6 +168,16 @@ def plot_results(
     ratio_y_pad = (max(ratio_vals_all) - min(ratio_vals_all)) * 0.05
     ratio_ylim = (min(ratio_vals_all) - ratio_y_pad, max(ratio_vals_all) + ratio_y_pad)
 
+    # Weighted average allocation ratio of the grand coalition: total allocated cost over
+    # total singleton cost (equivalent to weighting each client's cost_ratio by its
+    # singleton cost, rather than a plain unweighted mean across clients).
+    total_singleton_cost = sum(coalition_costs[frozenset([c])] for c in plot_keys)
+    for alloc in allocations:
+        label, _ = allocation_labels[alloc]
+        total_cost = sum(allocation_costs[alloc][c] for c in plot_keys)
+        weighted_avg_ratio = total_cost / total_singleton_cost * 100
+        print(f"Weighted average allocation ratio for {label}: {weighted_avg_ratio:.2f}%")
+
     # flat_rate is shown as a reference overlay on every panel instead of getting its own.
     grid_allocations = [a for a in allocations if a != "flat_rate"]
     flat_label, flat_color = allocation_labels.get("flat_rate", (None, None))
@@ -222,7 +232,7 @@ def plot_results(
                 ax.tick_params(axis="x", labelbottom=False)
     # supylabel must exist before tight_layout() so its width is accounted for in the
     # left margin -- adding it afterwards leaves it overlapping the left column's ticks.
-    fig.supylabel("Consumer Allocation Ratio [%]")
+    fig.supylabel("Consumer allocation ratio [%]")
     # Default tight_layout pad (1.08 x font size ~= 0.15 in) is applied twice in the left
     # margin here -- once before the y-tick labels, once between them and the supylabel --
     # which leaves a wide gap between the supylabel and the plots. A tighter pad pulls the
@@ -232,6 +242,58 @@ def plot_results(
     fig.tight_layout(pad=fig._tight_layout_pad)
     fig.subplots_adjust(hspace=0.08)
     figures["p_cost_ratio"] = fig
+
+    # --- p_cost_ratio_grouped_bar (A, B, E, H only; grouped by agent, flat_rate as a
+    # per-group reference line rather than its own bar) ---
+    highlighted_agents = ["A", "B", "E", "H"]
+    highlighted_keys = [c for c in plot_keys if client_name_mapping[c] in highlighted_agents]
+    highlighted_keys.sort(key=lambda c: highlighted_agents.index(client_name_mapping[c]))
+
+    if highlighted_keys:
+        bar_allocations = [a for a in allocations if a != "flat_rate"]
+        n_bars = len(bar_allocations)
+        bar_width = 0.8 / n_bars
+        group_centers = np.arange(len(highlighted_keys))
+
+        default_width, default_height = style.DEFAULT_FIGSIZE
+        fig, ax = plt.subplots(figsize=(default_width, default_height/2.1))
+        for i, alloc in enumerate(bar_allocations):
+            label, color = allocation_labels[alloc]
+            vals = [cost_ratio[alloc][k] for k in highlighted_keys]
+            offsets = group_centers - 0.4 + bar_width * (i + 0.5)
+            ax.bar(offsets, vals, width=bar_width, color=color, label=label)
+
+        if "flat_rate" in cost_ratio:
+            flat_label, flat_color = allocation_labels["flat_rate"]
+            # Slightly wider than the combined span of the mechanism bars (which is
+            # exactly `group_center +/- 0.4`) so each group's reference line visibly
+            # overhangs its bars instead of terminating flush with the outer edges.
+            line_half_width = 0.4 + bar_width * 0.5
+            for j, k in enumerate(highlighted_keys):
+                ax.hlines(
+                    cost_ratio["flat_rate"][k],
+                    group_centers[j] - line_half_width,
+                    group_centers[j] + line_half_width,
+                    colors=flat_color, linestyles="--", linewidth=2,
+                    label=flat_label if j == 0 else None,
+                )
+
+        ax.set_xlabel("Consumer")
+        # Smaller than the shared default: at this figure's shortened height, the rotated
+        # label at the default size is longer than the figure is tall and gets clipped.
+        ax.set_ylabel("Consumer allocation ratio [%]", fontsize=10)
+        ax.set_xticks(group_centers, [client_name_mapping[k] for k in highlighted_keys])
+        ax.grid(axis="y")
+        ax.set_axisbelow(True)
+        # Placed outside the axes -- the flat_rate line for the highest-ratio group (H,
+        # ~223%) sits near the top of the plot and would otherwise be hidden behind an
+        # in-axes legend box.
+        ax.legend(loc="center left", bbox_to_anchor=(1, 0.5))
+        # No fig.tight_layout() here: at this figure's shortened height, with the legend
+        # anchored outside the axes, tight_layout's own margin calculation clips the
+        # y-axis label -- savefig's bbox_inches="tight" (style.save_figure) already sizes
+        # the saved PNG to fit every artist without it.
+        figures["p_cost_ratio_grouped_bar"] = fig
 
     # --- p_cost_ratio_vs_pv ---
     fig, ax = plt.subplots()

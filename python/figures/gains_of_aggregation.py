@@ -45,8 +45,8 @@ def plot_gains_of_aggregation(coalition_costs, clients):
         marker="o", markersize=3, linewidth=2,
         color=style.PALETTE["light_green"], label="Unweighted average",
     )
-    ax.set_xlabel("Consumers in Coalition")
-    ax.set_ylabel("Coalition Allocation\nRatio [%]")
+    ax.set_xlabel("Coalition size")
+    ax.set_ylabel("Coalition allocation\nratio [%]")
     ax.set_xticks(range(1, n + 1))
     plt.setp(ax.get_xticklabels(), rotation=90)
     ax.tick_params(axis="x", bottom=True)
