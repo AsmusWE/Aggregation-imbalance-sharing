@@ -1,0 +1,103 @@
+include("Imbalance_functions.jl")
+
+function generate_scenarios_demand(clients, demand_df, start_hour; num_scenarios = 50)
+    # Find the index of the first value after the start_hour in demand_df
+    start_idx = find_period_start_index(demand_df[:, :HourUTC_datetime], start_hour)
+    scen_length = length(demand_df[1:start_idx, :HourUTC_datetime])  # Length of the historical data before start_hour
+    # Filter demand_df to only include data before the start_hour
+    demand_df = demand_df[1:start_idx, :]
+
+    scenarios_dict = Dict()
+
+    for client in clients
+        # Looping over weekdays
+        for w in 1:7
+            key = tuple(client, w)
+            # Determine weekday from "HourUTC_datetime" column
+            # Assuming "HourUTC_datetime" is of DateTime type
+            weekday_numbers = dayofweek.(demand_df[:, :HourUTC_datetime])  # 1=Monday, ..., 7=Sunday
+            weekday_indices = findall(weekday_numbers .== w)
+            # Number of scenarios for this weekday
+            weekday_total_scenarios = div(length(weekday_indices), scen_length, RoundDown)
+            # Only proceed if there are enough samples for this weekday
+            if weekday_total_scenarios == 0
+                println("Not enough data for client $client on weekday $w. Skipping.")
+                continue
+            end
+            # Initialize array for this weekday
+            client_scenarios = zeros(scen_length, weekday_total_scenarios)
+            for i in 1:weekday_total_scenarios
+                idx_range = weekday_indices[(i-1)*scen_length+1 : i*scen_length]
+                client_scenarios[:, i] = demand_df[!, client][idx_range]
+            end
+            # Randomly select num_scenarios from the generated scenarios
+            selected_indices = rand(1:weekday_total_scenarios, min(num_scenarios, weekday_total_scenarios))
+            scenarios_dict[key] = client_scenarios[:, selected_indices]
+        end
+    end
+
+    return scenarios_dict
+end
+
+function generate_scenarios_demand_rolling(clients, demand_df, start_hour, sim_days; num_scenarios = 5)
+    # Find the length of the data after the start_hour in demand_df
+    start_idx = find_period_start_index(demand_df[:, :HourUTC_datetime], start_hour)
+    scen_length = sim_days * 24  # 24 time steps per day, sim_days days
+    scenarios_dict = Dict()
+    scenario_offset = 24*7 # 24 time steps per day, 7 days in a week.
+    for client in clients
+        # Initialize an array to store scenarios for the client
+        client_scenarios = zeros(scen_length, num_scenarios)
+        # Loop over the number of scenarios
+        for i in 1:num_scenarios
+            # Scenario i is the real data shifted by i weeks
+            client_scenarios[:, i] = demand_df[start_idx - i*scenario_offset : start_idx - i*scenario_offset + scen_length - 1, client]
+        end
+        scenarios_dict[client] = client_scenarios
+    end
+
+    return scenarios_dict
+end
+
+function generate_scenarios_imbalance_spread(system_data, start_hour, scenario_length; num_scenarios = 100)
+    imbalance_spread = system_data["price_prod_demand_df"][:, :ImbalanceSpreadEUR]
+    spot_price = system_data["price_prod_demand_df"][:, :SpotPriceEUR]
+    spread_scenarios = zeros(num_scenarios, scenario_length)
+    spot_scenarios = zeros(num_scenarios, scenario_length)
+
+    # Only keep data from before the start_hour
+    start_idx = find_period_start_index(system_data["price_prod_demand_df"][:, :HourUTC_datetime], start_hour)
+    data_length = start_idx - 1  # Length of the data before the start_hour
+    imbalance_spread = imbalance_spread[1:data_length]
+    spot_price = spot_price[1:data_length]
+
+    # Check if we have enough data to generate scenarios of the required length
+    if data_length < scenario_length* num_scenarios
+        error("Not enough historical data ($(data_length) points) to generate $(num_scenarios) scenarios of length $(scenario_length)")
+    end
+
+    # Generate scenarios by randomly selecting consecutive sequences from the historical data
+    for i in 1:num_scenarios
+        # Randomly select a starting index that is a multiple of 24 (ensuring start at 00:00)
+        # and ensuring we have enough data for the full scenario length
+        max_start_idx = data_length - scenario_length + 1
+        # Find the maximum multiple of 24 that is <= max_start_idx
+        max_start_multiple_24 = div(max_start_idx - 1, 24) * 24 + 1
+        # Randomly select from valid multiples of 24
+        num_valid_starts = div(max_start_multiple_24 - 1, 24) + 1
+        random_multiple = rand(0:num_valid_starts-1)
+        start_idx = random_multiple * 24 + 1
+        spread_scenarios[i, :] = imbalance_spread[start_idx:start_idx + scenario_length - 1]
+        spot_scenarios[i, :] = spot_price[start_idx:start_idx + scenario_length - 1]
+    end
+
+    return spread_scenarios, spot_scenarios
+end
+
+function generate_dominant_direction(spread_scenarios)
+    # Generate a per-scenario dominant-direction array (1 = positive price spread, 0 = negative/zero)
+    # from imbalance spread scenarios. Distinct from the historical `DominantDirection` column
+    # produced in Data_import.jl: this one is scenario-indexed and used inside the bidding
+    # optimization (see stochastic_data["dominant_direction_scenarios"]).
+    return ifelse.(spread_scenarios .> 0, 1, 0)
+end

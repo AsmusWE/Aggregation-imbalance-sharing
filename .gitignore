@@ -1,0 +1,31 @@
+# --- Data ---
+# NDA-covered client data; not distributable, see data/sources.txt.
+data/private/*
+
+# --- Simulation outputs ---
+# Serialized run outputs and generated plots are reproducible from the scripts,
+# so only one example figure is tracked as a reference.
+*.jls
+*.svg
+
+results/*
+results/figures/*
+!results/figures/ClientPVCoverageDemand.svg
+
+# Local-only output directory holding large cache files.
+Codes/Results/
+
+# --- Julia environment ---
+# Manifest.toml is intentionally tracked: this is a research-reproducibility
+# repo, not a registered package, so pinning exact resolved versions is the point.
+*.jl.cov
+*.jl.mem
+
+# --- Python ---
+__pycache__/
+*.pyc
+
+# --- OS ---
+Thumbs.db
+.DS_Store
+desktop.ini
