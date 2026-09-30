@@ -1,6 +1,6 @@
 # Sharing the Gains of Aggregation
 
-Code accompanying Asmus Winther Eriksen's DTU master's thesis, *"Sharing the Gains of Aggregation: Cooperative Redistribution of Imbalance Cost Savings"*. The full report is in [`docs/`](docs/).
+Code and full online companion accompanying Asmus Winther Eriksen and Jalal Kazempour's paper, *"Sharing the Gains of Aggregation: Cooperative Imbalance Cost Allocation"*. 
 
 ## Abstract
 
